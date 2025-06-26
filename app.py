@@ -74,7 +74,8 @@ st.write("First few rows of the processed dataset:")
 st.dataframe(df.head())
 
 st.write("Dataset Information:")
-buffer = pd.io.StringIO()
+from io import StringIO
+buffer = StringIO()
 df.info(buf=buffer)
 s = buffer.getvalue()
 st.text(s)
