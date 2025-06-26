@@ -125,62 +125,6 @@ if uploaded_file is not None:
         st.write("No hay características para escalar (solo la variable objetivo).")
 
 
-    # --- PCA Analysis ---
-    st.header("6. Análisis de Componentes Principales (PCA)")
-
-    df_numeric_pca = df.select_dtypes(include=np.number).copy()
-    if not df_numeric_pca.empty:
-        # Standardize the data before applying PCA
-        scaler_pca = StandardScaler()
-        df_scaled_pca = scaler_pca.fit_transform(df_numeric_pca)
-
-        # Apply PCA
-        pca = PCA()
-        principal_components = pca.fit_transform(df_scaled_pca)
-
-        # Explained variance ratio
-        explained_variance = pca.explained_variance_ratio_
-        cumulative_explained_variance = np.cumsum(explained_variance)
-
-        st.subheader("Varianza Explicada por Componente Principal")
-        pca_summary_df = pd.DataFrame({
-            'Principal Component': [f'PC{i+1}' for i in range(len(explained_variance))],
-            'Explained Variance Ratio': explained_variance,
-            'Cumulative Explained Variance': cumulative_explained_variance
-        })
-        st.dataframe(pca_summary_df)
-
-        st.subheader("Gráfico de Varianza Explicada Acumulada")
-        fig_cum_var, ax_cum_var = plt.subplots(figsize=(10, 6))
-        ax_cum_var.plot(range(1, len(explained_variance) + 1), cumulative_explained_variance, marker='o', linestyle='--')
-        ax_cum_var.set_title('Varianza Explicada por Número de Componentes Principales')
-        ax_cum_var.set_xlabel('Número de Componentes Principales')
-        ax_cum_var.set_ylabel('Ratio de Varianza Explicada Acumulada')
-        ax_cum_var.grid(True)
-        st.pyplot(fig_cum_var)
-
-        st.subheader("Gráfico de Varianza Explicada por Componente")
-        fig_var, ax_var = plt.subplots(figsize=(10, 6))
-        ax_var.bar(range(1, len(explained_variance) + 1), explained_variance)
-        ax_var.set_title('Varianza Explicada por Componente Principal')
-        ax_var.set_xlabel('Componente Principal')
-        ax_var.set_ylabel('Ratio de Varianza Explicada')
-        st.pyplot(fig_var)
-
-        # Optional: Visualize the first two principal components
-        if principal_components.shape[1] >= 2:
-            st.subheader("PCA - Primeros Dos Componentes Principales")
-            fig_pca, ax_pca = plt.subplots(figsize=(10, 8))
-            ax_pca.scatter(principal_components[:, 0], principal_components[:, 1])
-            ax_pca.set_title('PCA - Primeros Dos Componentes Principales')
-            ax_pca.set_xlabel('Componente Principal 1')
-            ax_pca.set_ylabel('Componente Principal 2')
-            ax_pca.grid(True)
-            st.pyplot(fig_pca)
-    else:
-        st.write("No hay columnas numéricas para realizar PCA.")
-
-
     # --- Model Training and Evaluation ---
     st.header("7. Entrenamiento y Evaluación de Modelos")
 
