@@ -1,371 +1,317 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression, Lasso
-from sklearn.neighbors import KNeighborsRegressor
-from sklearn.svm import SVR
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import VotingRegressor, RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-import joblib
-import base64 # For download links
-# No ydata-profiling as it's not designed for real-time Streamlit use.
 
-# --- Helper Function for Download Links ---
-def get_download_link(file_path, file_label):
-    with open(file_path, 'rb') as f:
-        data = f.read()
-    bin_file = base64.b64encode(data).decode()
-    href = f'<a href="data:application/octet-stream;base64,{bin_file}" download="{file_path}">{file_label}</a>'
-    return href
+# Set Streamlit page configuration
+st.set_page_config(layout="wide", page_title="Air Quality Prediction App")
 
-# --- Streamlit App ---
+st.title("Air Quality Prediction Dashboard")
 
-st.set_page_config(layout="wide")
+# --- Helper Functions ---
 
-st.title("Análisis y Modelado de Calidad del Aire")
+@st.cache_data
+def load_data(uploaded_file):
+  """Loads data from an uploaded file."""
+  if uploaded_file is not None:
+    try:
+      df = pd.read_excel(uploaded_file)
+      # Perform initial cleaning and column dropping as in the notebook
+      df = df.drop(['Fecha y Hora de Inicio (dd/MM/aaaa  HH:mm:ss)',
+                    'Fecha y Hora de Finalización (dd/MM/aaaa  HH:mm:ss)',
+                    'Precipitación (mm)'], axis=1, errors='ignore')
+      if 'Humedad Relativa 10m (%)' in df.columns:
+        df = df.drop(['Humedad Relativa 10m (%)'], axis=1)
+      return df
+    except Exception as e:
+      st.error(f"Error loading file: {e}")
+      return None
+  return None
+
+@st.cache_resource
+def load_model(model_path):
+  """Loads a trained model."""
+  try:
+    model = joblib.load(model_path)
+    return model
+  except Exception as e:
+    st.error(f"Error loading model: {e}")
+    return None
+
+@st.cache_resource
+def load_scaler(scaler_path):
+  """Loads a trained scaler."""
+  try:
+    scaler = joblib.load(scaler_path)
+    return scaler
+  except Exception as e:
+    st.error(f"Error loading scaler: {e}")
+    return None
+
+def evaluate_model(model, X_test, y_test):
+  """Evaluates a given model and returns metrics."""
+  y_pred = model.predict(X_test)
+
+  mae = mean_absolute_error(y_test, y_pred)
+  rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+  r2 = r2_score(y_test, y_pred)
+
+  # Calculate MAPE, handling division by zero
+  y_test_non_zero = y_test[y_test != 0]
+  y_pred_non_zero = y_pred[y_test != 0]
+  mape = np.mean(np.abs((y_test_non_zero - y_pred_non_zero) / y_test_non_zero)) * 100 if len(y_test_non_zero) > 0 else float('inf')
+
+  return mae, rmse, r2, mape, y_pred
 
 # --- File Upload ---
-st.header("1. Cargar Datos")
-uploaded_file = st.file_uploader("Sube tu archivo Excel (.xlsx)", type=["xlsx"])
+st.sidebar.header("Upload Data")
+uploaded_file = st.sidebar.file_uploader("Upload your Excel data file", type=["xlsx"])
 
-if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
-    st.write("Datos cargados exitosamente:")
-    st.dataframe(df.head())
+df = load_data(uploaded_file)
 
-    # --- Data Cleaning and Preparation ---
-    st.header("2. Limpieza y Preparación de Datos")
+if df is not None:
+  st.sidebar.success("File uploaded and processed successfully!")
+  st.header("Data Overview")
+  st.write("First 5 rows of the processed data:")
+  st.dataframe(df.head())
+  st.write("Data Info:")
+  st.text(df.info())
 
-    # Drop specified columns
-    columns_to_drop = ['Fecha y Hora de Inicio (dd/MM/aaaa  HH:mm:ss)',
-                       'Fecha y Hora de Finalización (dd/MM/aaaa  HH:mm:ss)',
-                       'Precipitación (mm)']
-    initial_columns_dropped = [col for col in columns_to_drop if col in df.columns]
-    df = df.drop(columns=initial_columns_dropped, axis=1, errors='ignore')
-    if initial_columns_dropped:
-        st.write(f"Columnas eliminadas inicialmente: {', '.join(initial_columns_dropped)}")
-        st.dataframe(df.head())
+  # --- Data Preprocessing Steps (adapted for Streamlit) ---
 
-    # Drop 'Humedad Relativa 10m (%)' if it exists
-    humidity_col_to_drop = 'Humedad Relativa 10m (%)'
-    if humidity_col_to_drop in df.columns:
-        df = df.drop([humidity_col_to_drop], axis=1, errors='ignore')
-        st.write(f"Columna eliminada: '{humidity_col_to_drop}'")
-        st.dataframe(df.head())
+  st.header("Data Preprocessing")
+
+  # Display columns after initial drop
+  st.subheader("Columns after initial processing:")
+  st.write(df.columns.tolist())
+
+
+  # Outlier Visualization (Box Plot)
+  st.subheader("Outlier Visualization (Box Plots)")
+  df_numeric = df.select_dtypes(include=np.number)
+  if not df_numeric.empty:
+    fig, ax = plt.subplots(figsize=(15, 10))
+    sns.boxplot(data=df_numeric, ax=ax)
+    ax.set_title('Box Plots of Numerical Variables')
+    ax.set_xticks(range(len(df_numeric.columns)))
+    ax.set_xticklabels(df_numeric.columns, rotation=45, ha='right')
+    plt.tight_layout()
+    st.pyplot(fig)
+  else:
+    st.write("No numerical columns to display box plots.")
+
+  # Outlier Identification (Display only)
+  st.subheader("Identified Outliers")
+  outliers = {}
+  for col in df_numeric.columns:
+      Q1 = df_numeric[col].quantile(0.25)
+      Q3 = df_numeric[col].quantile(0.75)
+      IQR = Q3 - Q1
+      lower_bound = Q1 - 1.5 * IQR
+      upper_bound = Q3 + 1.5 * IQR
+      col_outliers = df_numeric[(df_numeric[col] < lower_bound) | (df_numeric[col] > upper_bound)]
+      if not col_outliers.empty:
+          outliers[col] = col_outliers
+
+  if outliers:
+      st.write("Outlier Records (showing first 5 for each column):")
+      for col, outlier_df in outliers.items():
+          st.write(f"**Outliers for {col}:**")
+          st.dataframe(outlier_df.head()) # Show only the first few outlier rows
+  else:
+      st.write("No significant outliers detected based on the IQR method.")
+
+
+  # Feature Scaling
+  st.subheader("Feature Scaling (using StandardScaler)")
+  # Assuming the target variable is 'PM10 (ug/m3)\nCondición Estándar'
+  target_variable = 'PM10 (ug/m3)\nCondición Estándar'
+
+  if target_variable in df.columns:
+    numerical_cols = df.select_dtypes(include=np.number).columns
+    feature_cols = [col for col in numerical_cols if col != target_variable]
+
+    if feature_cols:
+      X = df[feature_cols]
+      y = df[target_variable]
+
+      # Split the data before scaling to prevent data leakage
+      from sklearn.model_selection import train_test_split
+      X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+      # Initialize and fit the scaler on the training data
+      scaler = StandardScaler()
+      X_train_scaled = scaler.fit_transform(X_train)
+      X_test_scaled = scaler.transform(X_test)
+
+      st.write("Features have been scaled using StandardScaler.")
+      st.write("Shape of scaled training data:", X_train_scaled.shape)
+      st.write("Shape of scaled test data:", X_test_scaled.shape)
+
+      # Save the scaler for later use in prediction
+      joblib.dump(scaler, 'standard_scaler.pkl')
+      st.success("Standard scaler trained on training features and saved.")
+
+      # PCA Analysis (Optional but included based on notebook)
+      st.subheader("Principal Component Analysis (PCA)")
+      # Apply PCA on the scaled training data
+      pca = PCA()
+      principal_components_train = pca.fit_transform(X_train_scaled)
+
+      explained_variance = pca.explained_variance_ratio_
+      cumulative_explained_variance = np.cumsum(explained_variance)
+
+      st.write("Explained Variance Ratio by Principal Component:")
+      pca_summary_df = pd.DataFrame({
+          'Principal Component': [f'PC{i+1}' for i in range(len(explained_variance))],
+          'Explained Variance Ratio': explained_variance,
+          'Cumulative Explained Variance': cumulative_explained_variance
+      })
+      st.dataframe(pca_summary_df)
+
+      # Plot explained variance
+      fig_pca_cum, ax_pca_cum = plt.subplots(figsize=(10, 6))
+      ax_pca_cum.plot(range(1, len(explained_variance) + 1), cumulative_explained_variance, marker='o', linestyle='--')
+      ax_pca_cum.set_title('Explained Variance by Number of Principal Components')
+      ax_pca_cum.set_xlabel('Number of Principal Components')
+      ax_pca_cum.set_ylabel('Cumulative Explained Variance Ratio')
+      ax_pca_cum.grid(True)
+      st.pyplot(fig_pca_cum)
+
+      fig_pca_ind, ax_pca_ind = plt.subplots(figsize=(10, 6))
+      ax_pca_ind.bar(range(1, len(explained_variance) + 1), explained_variance)
+      ax_pca_ind.set_title('Explained Variance per Principal Component')
+      ax_pca_ind.set_xlabel('Principal Component')
+      ax_pca_ind.set_ylabel('Explained Variance Ratio')
+      st.pyplot(fig_pca_ind)
+
+      # Decide on the number of components for potential dimensionality reduction if needed
+      # For this Streamlit app, we will use the original scaled features for model training
+      # but the PCA analysis helps understand the data structure.
+
     else:
-        st.write(f"La columna '{humidity_col_to_drop}' no se encontró en el archivo.")
+      st.warning("No numerical features found excluding the target variable.")
+      X_train_scaled = None
+      X_test_scaled = None
+      y_train = None
+      y_test = None
 
-    st.write("Información del DataFrame después de la limpieza:")
-    st.write(df.info())
-
-
-    # --- Basic Statistics ---
-    st.header("3. Estadísticas Descriptivas")
-    st.write(df.describe())
-
-    # --- Data Visualization ---
-    st.header("4. Visualización de Datos")
-
-    st.subheader("Diagramas de Caja (Box Plots)")
-    df_numeric = df.select_dtypes(include=np.number)
-    if not df_numeric.empty:
-        fig, ax = plt.subplots(figsize=(15, 10))
-        sns.boxplot(data=df_numeric, ax=ax)
-        ax.set_title('Diagramas de Caja de Variables Numéricas')
-        ax.tick_params(axis='x', labelrotation=45)
-        plt.tight_layout()
-        st.pyplot(fig)
-    else:
-        st.write("No hay columnas numéricas para mostrar diagramas de caja.")
-
-    # Outlier Identification (Displaying summary, not the full records in Streamlit for brevity)
-    st.subheader("Identificación de Outliers (Resumen)")
-    outliers_summary = {}
-    for col in df_numeric.columns:
-        Q1 = df_numeric[col].quantile(0.25)
-        Q3 = df_numeric[col].quantile(0.75)
-        IQR = Q3 - Q1
-        lower_bound = Q1 - 1.5 * IQR
-        upper_bound = Q3 + 1.5 * IQR
-        col_outliers_count = df_numeric[(df_numeric[col] < lower_bound) | (df_numeric[col] > upper_bound)].shape[0]
-        if col_outliers_count > 0:
-            outliers_summary[col] = col_outliers_count
-    if outliers_summary:
-        st.write("Número de outliers detectados por columna (usando el método IQR):")
-        st.write(outliers_summary)
-    else:
-        st.write("No se detectaron outliers significativos (usando el método IQR).")
+  else:
+    st.error(f"Target variable '{target_variable}' not found in the DataFrame.")
+    X_train_scaled = None
+    X_test_scaled = None
+    y_train = None
+    y_test = None
 
 
-    # --- Data Scaling (for modeling) ---
-    st.header("5. Escalado de Datos")
-    df_scaled_modeling = df.copy()
+  # --- Model Training and Evaluation ---
+  if X_train_scaled is not None and X_test_scaled is not None:
+    st.header("Model Training and Evaluation")
 
-    # Identify columns to scale (all numerical except the target)
-    target_variable = 'PM10 (ug/m3)\nCondición Estándar' # Define target here
-    columns_to_scale_modeling = df_scaled_modeling.select_dtypes(include=np.number).columns.tolist()
-    if target_variable in columns_to_scale_modeling:
-        columns_to_scale_modeling.remove(target_variable)
+    # Placeholder for model loading/training based on your saved models
+    st.write("Loading pre-trained models...")
 
-    if columns_to_scale_modeling:
-        scaler_modeling = StandardScaler()
-        df_scaled_modeling[columns_to_scale_modeling] = scaler_modeling.fit_transform(df_scaled_modeling[columns_to_scale_modeling])
-        st.write("Datos escalados para el modelado (StandardScaler aplicado a características):")
-        st.dataframe(df_scaled_modeling.head())
-        # Save the scaler for future predictions
-        joblib.dump(scaler_modeling, 'standard_scaler.pkl')
-        st.write("Scaler guardado como `standard_scaler.pkl`.")
-    else:
-        st.write("No hay características para escalar (solo la variable objetivo).")
-
-
-    # --- Model Training and Evaluation ---
-    st.header("7. Entrenamiento y Evaluación de Modelos")
-
-    # Define features (X) and target (y)
-    # Ensure the target variable name matches exactly, including the newline if present
-    if target_variable not in df.columns:
-         # Attempt to find the correct target column if the expected name doesn't match
-        matching_cols = [col for col in df.columns if 'PM10' in col and 'Condición Estándar' in col]
-        if matching_cols:
-            target_variable = matching_cols[0]
-            st.warning(f"Using found target column: '{target_variable}'")
-        else:
-            st.error(f"Target variable '{target_variable}' not found in DataFrame columns: {df.columns.tolist()}")
-            st.stop() # Stop execution if target column is not found
-
-
-    numerical_cols_model = df.select_dtypes(include=np.number).columns
-    feature_cols = [col for col in numerical_cols_model if col != target_variable]
-
-    if not feature_cols:
-         st.error("No features available to train the model after dropping columns.")
-         st.stop()
-
-    X = df[feature_cols]
-    y = df[target_variable]
-
-    # Split the data
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-    st.write(f"Dimensiones de los datos de entrenamiento: X={X_train.shape}, y={y_train.shape}")
-    st.write(f"Dimensiones de los datos de prueba: X={X_test.shape}, y={y_test.shape}")
-
-    # Dictionary to store evaluation metrics for different models
-    evaluation_metrics = {}
-
-    # Function to evaluate a model
-    def evaluate_model(model, X_test, y_test, model_name):
-        y_pred = model.predict(X_test)
-        mae = mean_absolute_error(y_test, y_pred)
-        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-        r2 = r2_score(y_test, y_pred)
-
-        # Calculate MAPE
-        y_test_non_zero = y_test[y_test != 0]
-        y_pred_non_zero = y_pred[y_test != 0]
-        mape = np.mean(np.abs((y_test_non_zero - y_pred_non_zero) / y_test_non_zero)) * 100 if len(y_test_non_zero) > 0 else float('inf')
-
-        metrics = {
-            'MAE': mae,
-            'MAPE (%)': mape,
-            'RMSE': rmse,
-            'R2': r2
-        }
-        evaluation_metrics[model_name] = metrics
-        return metrics, y_pred
-
-    # List of models to train and evaluate
     models = {
-        "Regresión Lineal": LinearRegression(),
-        "KNN Regressor": KNeighborsRegressor(),
-        "SVR": SVR(),
-        "Lasso Regressor": Lasso(),
-        "Decision Tree Regressor": DecisionTreeRegressor(random_state=42),
-        "Random Forest Regressor": RandomForestRegressor(random_state=42),
-        "Gradient Boosting Regressor": GradientBoostingRegressor(random_state=42)
+        "Linear Regression": load_model('best_linear_regression_model.pkl'),
+        "KNN Regressor": load_model('best_knn_model.pkl'),
+        "SVR": load_model('best_svm_model.pkl'),
+        "Lasso Regression": load_model('best_lasso_model.pkl'),
+        "Decision Tree Regressor": load_model('best_decision_tree_model.pkl'),
+        "Voting Regressor": load_model('best_voting_regressor_model.pkl'),
+        "Random Forest Regressor": load_model('best_random_forest_model.pkl'),
+        "Gradient Boosting Regressor": load_model('best_gradient_boosting_model.pkl'),
     }
 
-    # Add Voting Regressor using default instances for now
-    # Note: For optimal performance, you'd tune individual models first and then the VotingRegressor
-    # or tune the VotingRegressor with base models directly.
-    models["Voting Regressor"] = VotingRegressor(
-        estimators=[
-            ('lr', LinearRegression()),
-            ('knn', KNeighborsRegressor()),
-            ('svm', SVR()),
-            ('lasso', Lasso()),
-            ('dt', DecisionTreeRegressor(random_state=42))
-        ]
-    )
+    evaluation_results = {}
+    predictions = {}
 
-    trained_models = {}
-
-    st.subheader("Resultados de la Evaluación del Modelo (con parámetros por defecto)")
-
-    results_data = []
-
+    # Evaluate each loaded model
     for model_name, model in models.items():
-        st.write(f"--- Entrenamiento y Evaluación de: {model_name} ---")
-        try:
-            model.fit(X_train, y_train)
-            trained_models[model_name] = model
-            metrics, y_pred = evaluate_model(model, X_test, y_test, model_name)
+      if model:
+        st.subheader(f"Evaluating {model_name}")
+        mae, rmse, r2, mape, y_pred = evaluate_model(model, X_test_scaled, y_test) # Evaluate on scaled test data
+        evaluation_results[model_name] = {'MAE': mae, 'RMSE': rmse, 'R2': r2, 'MAPE': mape}
+        predictions[model_name] = y_pred
+        st.write(f"**{model_name} Metrics:**")
+        st.write(f"MAE: {mae:.4f}")
+        st.write(f"RMSE: {rmse:.4f}")
+        st.write(f"R2: {r2:.4f}")
+        st.write(f"MAPE: {mape:.4f}%")
+      else:
+        st.warning(f"Could not load model: {model_name}")
 
-            st.write(f"Métricas de Evaluación para {model_name}:")
-            st.write(f"  MAE: {metrics['MAE']:.4f}")
-            st.write(f"  MAPE: {metrics['MAPE (%)']:.4f}%")
-            st.write(f"  RMSE: {metrics['RMSE']:.4f}")
-            st.write(f"  R2: {metrics['R2']:.4f}")
+    # Display summary of evaluation metrics
+    if evaluation_results:
+      st.header("Model Comparison")
+      eval_df = pd.DataFrame(evaluation_results).T
+      st.dataframe(eval_df.style.highlight_min(subset=['MAE', 'RMSE', 'MAPE'], axis=0).highlight_max(subset=['R2'], axis=0))
 
-            results_data.append({
-                'Modelo': model_name,
-                'MAE': metrics['MAE'],
-                'MAPE (%)': metrics['MAPE (%)'],
-                'RMSE': metrics['RMSE'],
-                'R2': metrics['R2']
-            })
+      # Optional: Plot actual vs predicted for a chosen model
+      st.header("Actual vs. Predicted Values")
+      model_choice = st.selectbox("Select a model to visualize predictions:", list(predictions.keys()))
 
-            # Optional: Plot predictions vs actual
-            fig_pred_actual, ax_pred_actual = plt.subplots(figsize=(10, 6))
-            ax_pred_actual.scatter(y_test, y_pred, alpha=0.5)
-            ax_pred_actual.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'k--', lw=2)
-            ax_pred_actual.set_xlabel("Valores Reales")
-            ax_pred_actual.set_ylabel("Predicciones")
-            ax_pred_actual.set_title(f"Valores Reales vs. Predicciones ({model_name})")
-            st.pyplot(fig_pred_actual)
+      if model_choice:
+        y_test_array = y_test.values # Ensure y_test is a numpy array
+        y_pred_array = predictions[model_choice]
 
-            # Optional: Save model
-            model_filename = model_name.lower().replace(" ", "_").replace("-", "") + "_model.pkl"
-            joblib.dump(model, model_filename)
-            st.write(f"Modelo guardado como `{model_filename}`.")
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.scatter(y_test_array, y_pred_array, alpha=0.3)
+        ax.plot([y_test_array.min(), y_test_array.max()], [y_test_array.min(), y_test_array.max()], 'k--', lw=2)
+        ax.set_xlabel("Actual Values")
+        ax.set_ylabel("Predicted Values")
+        ax.set_title(f"Actual vs. Predicted Values ({model_choice})")
+        st.pyplot(fig)
 
-        except Exception as e:
-            st.error(f"Error entrenando o evaluando {model_name}: {e}")
-            results_data.append({
-                'Modelo': model_name,
-                'MAE': 'Error',
-                'MAPE (%)': 'Error',
-                'RMSE': 'Error',
-                'R2': 'Error'
-            })
+    else:
+      st.warning("No models were loaded or evaluated.")
 
-    st.subheader("Resumen de Métricas de Evaluación")
-    results_df = pd.DataFrame(results_data)
-    st.dataframe(results_df.set_index('Modelo'))
+    # --- Make Predictions on New Data ---
+    st.header("Make Predictions on New Data")
+    st.write("Enter values for the features to get a prediction.")
 
-    # --- Optional: Hyperparameter Tuning (Simplified for Streamlit) ---
-    st.header("8. Tuning de Hiperparámetros (Opcional)")
-    st.write("Nota: El tuning de hiperparámetros con GridSearchCV puede ser lento. Aquí solo mostramos los resultados si los modelos tunados ya existen.")
+    # Create input fields for each feature
+    new_data = {}
+    if feature_cols:
+      for col in feature_cols:
+        # Use appropriate input widgets based on expected data type if possible
+        new_data[col] = st.number_input(f"Enter value for {col}", value=0.0, step=0.01)
 
-    # Check if tuned models exist and display their results
-    tuned_models_info = {
-        'Best Linear Regression': 'best_linear_regression_model.pkl',
-        'Best KNN Regressor': 'best_knn_model.pkl',
-        'Best SVR': 'best_svm_model.pkl',
-        'Best Lasso Regressor': 'best_lasso_model.pkl',
-        'Best Decision Tree': 'best_decision_tree_model.pkl',
-        'Best Voting Regressor': 'best_voting_regressor_model.pkl',
-        'Best Random Forest': 'best_random_forest_model.pkl',
-        'Best Gradient Boosting': 'best_gradient_boosting_model.pkl'
-    }
+      if st.button("Predict"):
+        # Create a DataFrame from the input data
+        new_data_df = pd.DataFrame([new_data])
 
-    tuned_results_data = []
+        # Load the trained scaler
+        scaler = load_scaler('standard_scaler.pkl')
 
-    for tuned_name, tuned_filename in tuned_models_info.items():
-        try:
-            tuned_model = joblib.load(tuned_filename)
-            st.write(f"--- Evaluación de: {tuned_name} (Modelo Tunado) ---")
-            metrics, y_pred_tuned = evaluate_model(tuned_model, X_test, y_test, tuned_name)
-            st.write(f"Métricas de Evaluación para {tuned_name}:")
-            st.write(f"  MAE: {metrics['MAE']:.4f}")
-            st.write(f"  MAPE: {metrics['MAPE (%)']:.4f}%")
-            st.write(f"  RMSE: {metrics['RMSE']:.4f}")
-            st.write(f"  R2: {metrics['R2']:.4f}")
+        if scaler:
+            # Scale the new data using the loaded scaler
+            new_data_scaled = scaler.transform(new_data_df)
 
-            tuned_results_data.append({
-                'Modelo Tunado': tuned_name,
-                'MAE': metrics['MAE'],
-                'MAPE (%)': metrics['MAPE (%)'],
-                'RMSE': metrics['RMSE'],
-                'R2': metrics['R2']
-            })
+            # Choose a model for prediction (e.g., the best R2 model)
+            if evaluation_results:
+                best_model_name_for_pred = max(evaluation_results, key=lambda k: evaluation_results[k].get('R2', -float('inf')))
+                model_for_prediction = models.get(best_model_name_for_pred)
 
-        except FileNotFoundError:
-            st.write(f"Modelo tunado '{tuned_filename}' no encontrado. Ejecute el script original para generarlos.")
-        except Exception as e:
-            st.error(f"Error cargando o evaluando el modelo tunado {tuned_name}: {e}")
-            tuned_results_data.append({
-                'Modelo Tunado': tuned_name,
-                'MAE': 'Error',
-                'MAPE (%)': 'Error',
-                'RMSE': 'Error',
-                'R2': 'Error'
-            })
+                if model_for_prediction:
+                    prediction = model_for_prediction.predict(new_data_scaled)
+                    st.success(f"Predicted {target_variable} using {best_model_name_for_pred}: {prediction[0]:.4f}")
+                else:
+                    st.error("Could not load the best model for prediction.")
+            else:
+                 st.warning("No models were evaluated to select the best one for prediction.")
+        else:
+             st.error("Could not load the standard scaler. Cannot make predictions.")
 
-    if tuned_results_data:
-        st.subheader("Resumen de Métricas de Evaluación (Modelos Tunados)")
-        tuned_results_df = pd.DataFrame(tuned_results_data)
-        st.dataframe(tuned_results_df.set_index('Modelo Tunado'))
+    else:
+        st.warning("No features available for prediction.")
 
-
-    # --- Make Predictions (Simple Example) ---
-    st.header("9. Realizar Predicciones")
-    st.write("Puedes usar los modelos entrenados para hacer predicciones sobre nuevos datos.")
-
-    # Select a model to use for prediction
-    model_choice = st.selectbox("Selecciona un modelo para predicción:", list(trained_models.keys()))
-
-    if model_choice:
-        selected_model = trained_models[model_choice]
-
-        st.write(f"Modelo seleccionado: **{model_choice}**")
-        st.write("Ingresa los valores de las características para hacer una predicción.")
-
-        # Create input fields for each feature
-        input_values = {}
-        for feature in feature_cols:
-            input_values[feature] = st.number_input(f"Valor para '{feature}'", value=float(X_train[feature].mean())) # Default to mean value
-
-        if st.button("Predecir"):
-            # Prepare the input data
-            input_df = pd.DataFrame([input_values])
-
-            # Apply the same scaling used during training
-            # Need to ensure the columns are in the same order as during training/scaling
-            input_df_scaled = input_df.copy()
-            # Use the feature_cols list to ensure order and select columns for scaling
-            cols_to_scale_input = [col for col in feature_cols if col in columns_to_scale_modeling]
-            if cols_to_scale_input:
-                 # Load the scaler fitted on training features
-                 try:
-                     loaded_scaler = joblib.load('standard_scaler.pkl')
-                     input_df_scaled[cols_to_scale_input] = loaded_scaler.transform(input_df_scaled[cols_to_scale_input])
-                 except FileNotFoundError:
-                     st.error("Error: Scaler no encontrado. Por favor, asegura que el archivo 'standard_scaler.pkl' existe.")
-                     st.stop()
-                 except Exception as e:
-                     st.error(f"Error aplicando el scaler: {e}")
-                     st.stop()
-
-            # Ensure the input DataFrame has the exact same columns and order as X_train
-            # This is crucial for models like Linear Regression, Tree-based models, etc.
-            # If the input data might be missing columns (which shouldn't happen with fixed inputs here),
-            # you might need to add them with default values (e.g., 0 or mean).
-            input_df_final = input_df_scaled[feature_cols]
-
-
-            try:
-                prediction = selected_model.predict(input_df_final)[0]
-                st.subheader("Resultado de la Predicción:")
-                st.write(f"La predicción para {target_variable} es: **{prediction:.4f}**")
-            except Exception as e:
-                st.error(f"Error al hacer la predicción: {e}")
+  else:
+    st.warning("Data splitting or scaling failed. Cannot proceed with model training/evaluation.")
 
 else:
-    st.info("Por favor, carga un archivo Excel para comenzar el análisis.")
+  st.info("Please upload an Excel file to get started.")
