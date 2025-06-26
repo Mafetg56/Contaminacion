@@ -78,7 +78,7 @@ if uploaded_file is not None:
         fig, ax = plt.subplots(figsize=(15, 10))
         sns.boxplot(data=df_numeric, ax=ax)
         ax.set_title('Diagramas de Caja de Variables Numéricas')
-        ax.tick_params(axis='x', rotation=45, ha='right')
+        ax.tick_params(axis='x', labelrotation=45)
         plt.tight_layout()
         st.pyplot(fig)
     else:
