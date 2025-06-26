@@ -1,6 +1,7 @@
 # prompt: Haz el despliegue anterior (preparación de datos y predicción) para streamlit
 
-%%writefile app.py
+with open("app.py", "w") as f:
+    f.write("""TU CÓDIGO AQUÍ""")
 import streamlit as st
 import pandas as pd
 import joblib
