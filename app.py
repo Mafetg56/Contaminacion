@@ -146,21 +146,3 @@ st.subheader("Model Performance (from notebook)")
 st.write("Below are the evaluation metrics for the trained models on the test set from the original analysis:")
 
 
-
-# Recreate and display the boxplot if needed
-st.write("Box Plots of Numerical Variables:")
-df_numeric_for_viz = df.select_dtypes(include=np.number).copy()
-if target_variable in df_numeric_for_viz.columns:
-    df_numeric_for_viz = df_numeric_for_viz.drop(columns=[target_variable]) # Exclude target for boxplot if desired
-
-if not df_numeric_for_viz.empty:
-    fig_box, ax_box = plt.subplots(figsize=(15, 10))
-    sns.boxplot(data=df_numeric_for_viz, ax=ax_box)
-    ax_box.set_title('Box Plots of Numerical Variables')
-    ax.tick_params(axis='x', labelrotation=45)
-    plt.tight_layout()
-    st.pyplot(fig_box)
-else:
-    st.write("No numerical columns available for boxplot after excluding the target variable.")
-
-# You could also add visualizations for PCA results, feature importances (general), etc.
