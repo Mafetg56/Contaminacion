@@ -1,27 +1,22 @@
 import streamlit as st
 import pandas as pd
 import joblib
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import mean_absolute_error
-# Function to load data (adjust path as needed)
-@st.cache_data
-def load_data():
-    try:
-        df = pd.read_excel("Mediciones_Calidad_Aire_La_Candelaria_Organizado.xlsx")
-        # Apply the same data cleaning steps as in the notebook
-        df = df.drop(['Fecha y Hora de Inicio (dd/MM/aaaa  HH:mm:ss)', 'Fecha y Hora de Finalización (dd/MM/aaaa  HH:mm:ss)', 'Precipitación (mm)'], axis=1)
-        if 'Humedad Relativa 10m (%)' in df.columns:
-             df = df.drop(['Humedad Relativa 10m (%)'], axis=1)
-        return df
-    except FileNotFoundError:
-        st.error("Error: 'Mediciones_Calidad_Aire_La_Candelaria_Organizado.xlsx' not found.")
-        st.stop() # Stop the app if the file is not found
+import os
 
-# Function to load trained models and scaler
-@st.cache_resource
-def load_models():
+# Function to preprocess the data
+def preprocess_data(df, scaler):
+df = df.drop(['Fecha y Hora de Inicio (dd/MM/aaaa  HH:mm:ss)', 'Fecha y Hora de Finalización (dd/MM/aaaa  HH:mm:ss)', 'Precipitación (mm)', 'Humedad Relativa 10m (%)'], axis=1)
+
+# Apply Scaling
+df['Velocidad del Viento (m/s)'] = scaler.transform(df[['Velocidad del Viento (m/s)']]) 
+df['Dirección del viento (Grados)'] = scaler.transform(df[['Dirección del viento (Grados)']]) 
+df['Presión atmosférica (mm Hg)'] = scaler.transform(df[['Presión atmosférica (mm Hg)']]) 
+df['Radiación Solar Global (W/m2)'] = scaler.transform(df[['Radiación Solar Global (W/m2)']]) 
+
+return df
+
+
+
     try:
         models = {
             'Linear Regression': joblib.load('best_linear_regression_model.pkl'),
@@ -33,91 +28,36 @@ def load_models():
             'Random Forest Regressor': joblib.load('best_random_forest_model.pkl'),
             'Gradient Boosting Regressor': joblib.load('best_gradient_boosting_model.pkl')
         }
-        scaler = joblib.load('standard_scaler.pkl')
-        return models, scaler
-    except FileNotFoundError as e:
-        st.error(f"Error loading models or scaler: {e}. Please ensure all .pkl files are in the same directory.")
-        st.stop() # Stop the app if files are not found
-    except Exception as e:
-        st.error(f"An error occurred while loading models: {e}")
-        st.stop()
-
-# Load data, models, and scaler
-df = load_data()
-models, scaler = load_models()
-
-# Define the target variable and features based on the notebook
-target_variable = 'PM10 (ug/m3)\nCondición Estándar'
-if target_variable in df.columns:
-    numerical_cols = df.select_dtypes(include=np.number).columns
-    feature_cols = [col for col in numerical_cols if col != target_variable]
-else:
-     st.error(f"Target variable '{target_variable}' not found in the dataset columns.")
-     st.stop()
-
-# Check if features are available
-if not feature_cols:
-    st.error("No suitable numerical features found in the dataset after cleaning.")
+  except FileNotFoundError:
+    st.error("Error: Model files not found. Make sure 'saved_models' directory with required files exists.")
     st.stop()
 
 
-# Streamlit App Layout
-st.title("Air Quality Prediction App (La Candelaria)")
+# Streamlit App Title
+st.title("Predicción de Contaminación del aire en PM10 (ug/m3)")
 
 st.write("""
-This app predicts PM10 concentration based on selected atmospheric parameters
-using various regression models.
+Esta aplicación predice la contaminación del aire basado en los datos metereológicos.
 """)
 
-st.subheader("Dataset Overview")
-st.write("First few rows of the processed dataset:")
-st.dataframe(df.head())
+# File uploader for the user to upload their data
+uploaded_file = st.file_uploader("Sube tu archivo Excel (solo .xlsx)", type=["xlsx"])
 
-st.write("Dataset Information:")
-from io import StringIO
-buffer = StringIO()
-df.info(buf=buffer)
-s = buffer.getvalue()
-st.text(s)
+if uploaded_file is not None:
+    try:
+        # Read the uploaded Excel file into a pandas DataFrame
+        df = pd.read_excel(uploaded_file)
 
-
-st.subheader("Predict PM10 Concentration")
-
-# Sidebar for user input and model selection
-st.sidebar.header("Input Parameters")
-
-# Create input fields for each feature
-input_data = {}
-st.sidebar.write("Enter values for the following parameters:")
-
-for col in feature_cols:
-    # Use a number_input for numerical features
-    min_val = df[col].min() if not pd.isna(df[col].min()) else 0.0
-    max_val = df[col].max() if not pd.isna(df[col].max()) else 100.0
-    mean_val = df[col].mean() if not pd.isna(df[col].mean()) else 50.0
-    input_data[col] = st.sidebar.number_input(
-        f"{col}",
-        min_value=float(min_val),
-        max_value=float(max_val),
-        value=float(mean_val) # Default to mean value
-    )
-
-# Create a DataFrame from the input data
-input_df = pd.DataFrame([input_data])
-
-# Scale the input data using the fitted scaler
-try:
-    input_scaled = scaler.transform(input_df)
-except Exception as e:
-    st.error(f"Error scaling input data: {e}")
-    st.stop()
+        st.subheader("Datos cargados:")
+        st.write(df.head())
+        
+ # Preprocess the data
+        st.subheader("Datos preprocesados:")
+        processed_df = preprocess_data(df.copy(), scaler)
+        st.write(processed_df.head())
 
 
-st.sidebar.header("Model Selection")
-selected_model_name = st.sidebar.selectbox("Choose a regression model:", list(models.keys()))
 
-# Get the selected model
-selected_model = models[selected_model_name]
 
 # Make prediction
 if st.sidebar.button("Predict"):
