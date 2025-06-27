@@ -18,7 +18,7 @@ return df
 
 
     try:
-        models = {
+             scaler = joblib.load('standard_scaler.pkl')
             'Linear Regression': joblib.load('best_linear_regression_model.pkl'),
             'KNN Regressor': joblib.load('best_knn_model.pkl'),
             'SVR': joblib.load('best_svm_model.pkl'),
@@ -27,7 +27,7 @@ return df
             'Voting Regressor': joblib.load('best_voting_regressor_model.pkl'),
             'Random Forest Regressor': joblib.load('best_random_forest_model.pkl'),
             'Gradient Boosting Regressor': joblib.load('best_gradient_boosting_model.pkl')
-        }
+    
   except FileNotFoundError:
     st.error("Error: Model files not found. Make sure 'saved_models' directory with required files exists.")
     st.stop()
