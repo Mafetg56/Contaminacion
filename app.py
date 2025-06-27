@@ -157,7 +157,7 @@ if not df_numeric_for_viz.empty:
     fig_box, ax_box = plt.subplots(figsize=(15, 10))
     sns.boxplot(data=df_numeric_for_viz, ax=ax_box)
     ax_box.set_title('Box Plots of Numerical Variables')
-    ax_box.tick_params(axis='x', rotation=45, ha='right')
+    ax.tick_params(axis='x', labelrotation=45)
     plt.tight_layout()
     st.pyplot(fig_box)
 else:
