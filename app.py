@@ -14,11 +14,8 @@ df['Presión atmosférica (mm Hg)'] = scaler.transform(df[['Presión atmosféric
 df['Radiación Solar Global (W/m2)'] = scaler.transform(df[['Radiación Solar Global (W/m2)']]) 
 
 return df
-
-
-
-    try:
-             scaler = joblib.load('standard_scaler.pkl')
+try:
+scaler = joblib.load('standard_scaler.pkl')
             'Linear Regression': joblib.load('best_linear_regression_model.pkl'),
             'KNN Regressor': joblib.load('best_knn_model.pkl'),
             'SVR': joblib.load('best_svm_model.pkl'),
