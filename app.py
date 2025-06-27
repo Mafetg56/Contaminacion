@@ -15,20 +15,13 @@ df['Radiación Solar Global (W/m2)'] = scaler.transform(df[['Radiación Solar Gl
 
 return df
 try:
-scaler = joblib.load('standard_scaler.pkl')
-            'Linear Regression': joblib.load('best_linear_regression_model.pkl'),
-            'KNN Regressor': joblib.load('best_knn_model.pkl'),
-            'SVR': joblib.load('best_svm_model.pkl'),
-            'Lasso Regression': joblib.load('best_lasso_model.pkl'),
-            'Decision Tree Regressor': joblib.load('best_decision_tree_model.pkl'),
-            'Voting Regressor': joblib.load('best_voting_regressor_model.pkl'),
-            'Random Forest Regressor': joblib.load('best_random_forest_model.pkl'),
-            'Gradient Boosting Regressor': joblib.load('best_gradient_boosting_model.pkl')
-    
-  except FileNotFoundError:
+ scaler = joblib.load('standard_scaler.pkl')
+    rf_model = joblib.load('random_forest_regressor_model.pkl')
+    lr_model = joblib.load('linear_regressor_model.pkl')
+  
+except FileNotFoundError:
     st.error("Error: Model files not found. Make sure 'saved_models' directory with required files exists.")
     st.stop()
-
 
 # Streamlit App Title
 st.title("Predicción de Contaminación del aire en PM10 (ug/m3)")
