@@ -4,7 +4,7 @@ import joblib
 import os
 
 # Function to preprocess the data
-def preprocess_data(df, scaler):
+
 df = df.drop(['Fecha y Hora de Inicio (dd/MM/aaaa  HH:mm:ss)', 'Fecha y Hora de Finalización (dd/MM/aaaa  HH:mm:ss)', 'Precipitación (mm)', 'Humedad Relativa 10m (%)'], axis=1)
 
 # Apply Scaling
