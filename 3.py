@@ -1,4 +1,4 @@
-!pip install streamlit pandas scikit-learn joblib openpyxl matplotlib
+
 import streamlit as st
 import pandas as pd
 import joblib
