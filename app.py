@@ -145,60 +145,7 @@ if st.sidebar.button("Predict"):
 st.subheader("Model Performance (from notebook)")
 st.write("Below are the evaluation metrics for the trained models on the test set from the original analysis:")
 
-# You can manually display the metrics obtained in the notebook
-# Or load them if you saved them to a file
 
-st.write("Linear Regression:")
-st.write(f"- MAE: {mae_best_lr:.4f}")
-st.write(f"- MAPE: {mape_best_lr:.4f}%")
-st.write(f"- RMSE: {rmse_best_lr:.4f}")
-st.write(f"- R2: {r2_best_lr:.4f}")
-
-st.write("KNN Regressor:")
-st.write(f"- MAE: {mae_best_knn:.4f}")
-st.write(f"- MAPE: {mape_best_knn:.4f}%")
-st.write(f"- RMSE: {rmse_best_knn:.4f}")
-st.write(f"- R2: {r2_best_knn:.4f}")
-
-st.write("SVR:")
-st.write(f"- MAE: {mae_best_svm:.4f}")
-st.write(f"- MAPE: {mape_best_svm:.4f}%")
-st.write(f"- RMSE: {rmse_best_svm:.4f}")
-st.write(f"- R2: {r2_best_svm:.4f}")
-
-st.write("Lasso Regression:")
-st.write(f"- MAE: {mae_best_lasso:.4f}")
-st.write(f"- MAPE: {mape_best_lasso:.4f}%")
-st.write(f"- RMSE: {rmse_best_lasso:.4f}")
-st.write(f"- R2: {r2_best_lasso:.4f}")
-
-st.write("Decision Tree Regressor:")
-st.write(f"- MAE: {mae_best_dt:.4f}")
-st.write(f"- MAPE: {mape_best_dt:.4f}%")
-st.write(f"- RMSE: {rmse_best_dt:.4f}")
-st.write(f"- R2: {r2_best_dt:.4f}")
-
-st.write("Voting Regressor:")
-st.write(f"- MAE: {mae_best_voting:.4f}")
-st.write(f"- MAPE: {mape_best_voting:.4f}%")
-st.write(f"- RMSE: {rmse_best_voting:.4f}")
-st.write(f"- R2: {r2_best_voting:.4f}")
-
-st.write("Random Forest Regressor:")
-st.write(f"- MAE: {mae_best_rf:.4f}")
-st.write(f"- MAPE: {mape_best_rf:.4f}%")
-st.write(f"- RMSE: {rmse_best_rf:.4f}")
-st.write(f"- R2: {r2_best_rf:.4f}")
-
-st.write("Gradient Boosting Regressor:")
-st.write(f"- MAE: {mae_best_gbr:.4f}")
-st.write(f"- MAPE: {mape_best_gbr:.4f}%")
-st.write(f"- RMSE: {rmse_best_gbr:.4f}")
-st.write(f"- R2: {r2_best_gbr:.4f}")
-
-
-st.subheader("Data Visualization (from notebook)")
-st.write("Some visualizations from the data preparation step:")
 
 # Recreate and display the boxplot if needed
 st.write("Box Plots of Numerical Variables:")
