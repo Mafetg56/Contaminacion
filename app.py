@@ -4,7 +4,7 @@ import joblib
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+from sklearn.metrics import mean_absolute_error
 # Function to load data (adjust path as needed)
 @st.cache_data
 def load_data():
